@@ -23,14 +23,14 @@
     }
 
     .container {
-      max-width: 800px;
+      max-width: 950px;
       margin: 0 auto;
       display: grid;
       grid-template-columns: 320px 1fr;
       gap: 20px;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 820px) {
       .container {
         grid-template-columns: 1fr;
       }
@@ -54,13 +54,13 @@
       margin-bottom: 6px;
     }
 
-    input[type="number"] {
+    input[type="number"], input[type="text"] {
       width: 100%;
       padding: 8px 12px;
       box-sizing: border-box;
       border: 1px solid #cbd5e1;
       border-radius: 4px;
-      font-size: 1rem;
+      font-size: 0.95rem;
     }
 
     .help-text {
@@ -93,14 +93,20 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+    }
+
+    .pdf-export-area {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 10px;
+      background: #ffffff;
     }
 
     /* 名刺サイズ 85.6mm x 53.9mm */
-    #card-container {
+    .card-container {
       width: 85.6mm;
       height: 53.9mm;
-      background: #ffffff;
       border: 1px solid #000;
       box-sizing: border-box;
       padding: 4mm;
@@ -111,8 +117,26 @@
       overflow: hidden;
     }
 
+    /* デフォルトカード（白） */
+    .card-default {
+      background: #ffffff;
+    }
+
+    /* カスタムカード（薄いブルー） */
+    .card-custom {
+      background: #e0f2fe;
+    }
+
+    .card-badge {
+      font-size: 6pt;
+      font-weight: bold;
+      color: #2563eb;
+      text-align: right;
+      margin-bottom: -2mm;
+    }
+
     .card-title {
-      font-size: 8pt;
+      font-size: 7.5pt;
       font-weight: bold;
       text-align: center;
       border-bottom: 1px solid #000;
@@ -120,7 +144,7 @@
     }
 
     .card-info {
-      font-size: 6pt;
+      font-size: 5.5pt;
       color: #333;
       display: flex;
       justify-content: space-between;
@@ -142,30 +166,24 @@
       transform: translateX(-50%);
     }
 
-    /* ラベルの重なり防止（斜め表示＋交互の高さ設定） */
+    /* ラベルの重なり防止（斜め表示＋3段階の高さ調整） */
     .mark-label {
       position: absolute;
-      font-size: 5pt;
+      font-size: 4.5pt;
       font-weight: bold;
       white-space: nowrap;
       transform-origin: left bottom;
       transform: rotate(-45deg);
     }
 
-    .mark-label.level-high {
-      top: -14pt;
-      left: 0;
-    }
-
-    .mark-label.level-low {
-      top: -7pt;
-      left: 0;
-    }
+    .mark-label.level-0 { top: -16pt; left: 0; }
+    .mark-label.level-1 { top: -10pt; left: 0; }
+    .mark-label.level-2 { top: -4pt;  left: 0; }
 
     .instruction {
-      font-size: 5pt;
+      font-size: 4.8pt;
       line-height: 1.2;
-      color: #444;
+      color: #333;
       margin-top: 1mm;
     }
   </style>
@@ -175,12 +193,12 @@
 <div class="container">
   <!-- 入力フォーム -->
   <div class="form-panel">
-    <h2>身体サイズの入力</h2>
+    <h2>身体・目盛り設定</h2>
     
     <div class="form-group">
       <label for="armLength">腕の長さ（目からカードまで）[cm]</label>
       <input type="number" id="armLength" value="60" step="0.5">
-      <div class="help-text">※腕をピンと伸ばしてカードを持った時の目からの距離</div>
+      <div class="help-text">※腕をピンと伸ばしてカードを持った時の距離</div>
     </div>
 
     <div class="form-group">
@@ -190,83 +208,126 @@
     </div>
 
     <div class="form-group">
-      <label for="targetWidth">基準とする目標物の幅 [cm]</label>
-      <!-- 初期値を 30cm に設定して 3m/5m を余裕をもって収める -->
-      <input type="number" id="targetWidth" value="30" step="5">
-      <div class="help-text">※例: A4長辺(約30cm)、肩幅(約40cm)など</div>
+      <label for="customDistances">カスタム目盛り設定 [m]</label>
+      <input type="text" id="customDistances" value="3, 5, 8, 12, 20, 40">
+      <div class="help-text">※カンマ（,）区切りで表示したいメートル数を入力</div>
     </div>
 
-    <button onclick="generateCard()">目盛りを再計算</button>
-    <button onclick="downloadPDF()" style="background-color: #059669; margin-top: 8px;">PDFとして保存</button>
+    <button onclick="generateCards()">目盛りを再計算</button>
+    <button onclick="downloadPDF()" style="background-color: #059669; margin-top: 8px;">PDFとして2枚保存</button>
   </div>
 
   <!-- リアルタイムプレビュー -->
   <div class="preview-panel">
-    <h3>プレビュー（原寸大相当）</h3>
-    <div id="card-container">
-      <div>
-        <div class="card-title">視差距離測定カード (Personal Rangefinder)</div>
-        <div class="card-info">
-          <span id="disp-arm">腕: 60cm</span>
-          <span id="disp-pd">PD: 64mm</span>
-          <span id="disp-target">基準幅: 30cm</span>
+    <h3>プレビュー（2枚セット）</h3>
+    
+    <div id="pdf-export-area" class="pdf-export-area">
+      <!-- 1枚目：デフォルト（白） -->
+      <div class="card-container card-default">
+        <div>
+          <div class="card-badge">【標準仕様】</div>
+          <div class="card-title">視差距離測定カード (Personal Rangefinder)</div>
+          <div class="card-info">
+            <span class="disp-arm">腕: 60cm</span>
+            <span class="disp-pd">PD: 64mm</span>
+            <span>基準幅: 30cm</span>
+          </div>
+        </div>
+
+        <div class="ruler" id="ruler-default"></div>
+
+        <div class="instruction">
+          【使い方】片目で目標物（幅30cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。
         </div>
       </div>
 
-      <!-- 目盛り描画エリア -->
-      <div class="ruler" id="ruler"></div>
+      <!-- 2枚目：カスタム（薄いブルー） -->
+      <div class="card-container card-custom">
+        <div>
+          <div class="card-badge">【カスタム仕様】</div>
+          <div class="card-title">視差距離測定カード (Personal Rangefinder)</div>
+          <div class="card-info">
+            <span class="disp-arm">腕: 60cm</span>
+            <span class="disp-pd">PD: 64mm</span>
+            <span>基準幅: 30cm</span>
+          </div>
+        </div>
 
-      <div class="instruction" id="disp-instruction">
-        【使い方】片目で目標物（幅30cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。
+        <div class="ruler" id="ruler-custom"></div>
+
+        <div class="instruction">
+          【使い方】片目で目標物（幅30cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。
+        </div>
       </div>
     </div>
   </div>
 </div>
 
 <script>
-  // 表示したい距離のリスト [m]
-  const distancesToMark = [3, 5, 10, 15, 20, 30, 50, 100];
+  const TARGET_WIDTH_CM = 30; // 基準幅30cm固定
+  const defaultDistances = [3, 5, 10, 15, 20, 30, 50, 100];
 
-  function generateCard() {
+  function generateCards() {
     const armLengthCm = parseFloat(document.getElementById('armLength').value);
     const pdMm = parseFloat(document.getElementById('pd').value);
-    const targetWidthCm = parseFloat(document.getElementById('targetWidth').value);
+    
+    // カスタム数値のパース
+    const customInput = document.getElementById('customDistances').value;
+    const customDistances = customInput
+      .split(',')
+      .map(v => parseFloat(v.trim()))
+      .filter(v => !isNaN(v) && v > 0)
+      .sort((a, b) => a - b);
 
-    // プレビューテキストおよび使い方注記の更新
-    document.getElementById('disp-arm').innerText = `腕: ${armLengthCm}cm`;
-    document.getElementById('disp-pd').innerText = `PD: ${pdMm}mm`;
-    document.getElementById('disp-target').innerText = `基準: ${targetWidthCm}cm`;
-    document.getElementById('disp-instruction').innerText = 
-      `【使い方】片目で目標物（幅${targetWidthCm}cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。`;
+    // テキスト表示の更新
+    document.querySelectorAll('.disp-arm').forEach(el => el.innerText = `腕: ${armLengthCm}cm`);
+    document.querySelectorAll('.disp-pd').forEach(el => el.innerText = `PD: ${pdMm}mm`);
 
-    const ruler = document.getElementById('ruler');
-    ruler.innerHTML = ''; // クリア
+    // 1枚目（デフォルト）描画
+    renderRuler('ruler-default', defaultDistances, armLengthCm);
+
+    // 2枚目（カスタム）描画
+    renderRuler('ruler-custom', customDistances, armLengthCm);
+  }
+
+  function renderRuler(elementId, distances, armLengthCm) {
+    const ruler = document.getElementById(elementId);
+    ruler.innerHTML = '';
 
     // 基点の描画 (0m)
-    createMark(ruler, 0, '0m', 100, false);
+    createMark(ruler, 0, '0m', 100, 0);
 
-    distancesToMark.forEach((distM, index) => {
+    let prevShiftMm = -999;
+    let levelIndex = 0;
+
+    distances.forEach((distM) => {
       const distCm = distM * 100;
       // カード上での目盛り位置（左端 0 からの距離 [mm]）
-      const shiftMm = (targetWidthCm * armLengthCm) / distCm * 10;
+      const shiftMm = (TARGET_WIDTH_CM * armLengthCm) / distCm * 10;
 
       // 名刺の横幅利用可能領域（約 75mm）に収まる場合のみ描画
       if (shiftMm > 0 && shiftMm <= 75) {
-        // 隣り合うラベルが重ならないよう、高さを交互に変更
-        const isLowLevel = index % 2 !== 0;
-        createMark(ruler, shiftMm, `${distM}m`, 70, isLowLevel);
+        // 近接している（2mm未満）場合はラベルの高さを3段階に分散させて重なりを防止
+        if (Math.abs(shiftMm - prevShiftMm) < 2) {
+          levelIndex = (levelIndex + 1) % 3;
+        } else {
+          levelIndex = 0;
+        }
+
+        createMark(ruler, shiftMm, `${distM}m`, 70, levelIndex);
+        prevShiftMm = shiftMm;
       }
     });
   }
 
-  function createMark(container, positionMm, labelText, heightPercent, isLowLevel) {
+  function createMark(container, positionMm, labelText, heightPercent, levelIndex) {
     const mark = document.createElement('div');
     mark.className = 'mark';
     mark.style.left = `${positionMm}mm`;
     mark.style.height = `${heightPercent}%`;
 
     const label = document.createElement('div');
-    label.className = 'mark-label ' + (isLowLevel ? 'level-low' : 'level-high');
+    label.className = `mark-label level-${levelIndex}`;
     label.innerText = labelText;
 
     mark.appendChild(label);
@@ -274,10 +335,10 @@
   }
 
   function downloadPDF() {
-    const element = document.getElementById('card-container');
+    const element = document.getElementById('pdf-export-area');
     const opt = {
-      margin:       10,
-      filename:     'distance_card.pdf',
+      margin:       5,
+      filename:     'distance_cards_2sets.pdf',
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 3 },
       jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
@@ -287,7 +348,7 @@
   }
 
   // 初期描画
-  window.onload = generateCard;
+  window.onload = generateCards;
 </script>
 
 </body>
