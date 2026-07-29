@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>個人適合型 距離測定名刺カード生成器</title>
+  <!-- html2pdf.js ライブラリの読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --bg-color: #f4f6f8;
+      --panel-bg: #ffffff;
+      --primary: #2563eb;
+      --text: #1e293b;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-color);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .form-panel {
+      background: var(--panel-bg);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      font-weight: bold;
+      font-size: 0.9rem;
+      margin-bottom: 6px;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 8px 12px;
+      box-sizing: border-box;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+
+    .help-text {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 4px;
+    }
+
+    button {
+      width: 100%;
+      padding: 10px;
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    button:hover {
+      background-color: #1d4ed8;
+    }
+
+    .preview-panel {
+      background: var(--panel-bg);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* 名刺サイズ 85.6mm x 53.9mm */
+    #card-container {
+      width: 85.6mm;
+      height: 53.9mm;
+      background: #ffffff;
+      border: 1px solid #000;
+      box-sizing: border-box;
+      padding: 4mm;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+    }
+
+    .card-title {
+      font-size: 8pt;
+      font-weight: bold;
+      text-align: center;
+      border-bottom: 1px solid #000;
+      padding-bottom: 1mm;
+    }
+
+    .card-info {
+      font-size: 6pt;
+      color: #333;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    /* 距離測定用定規スケール */
+    .ruler {
+      position: relative;
+      height: 22mm;
+      border-left: 1px solid #000;
+      border-bottom: 1px solid #000;
+      margin-top: 2mm;
+    }
+
+    .mark {
+      position: absolute;
+      bottom: 0;
+      border-left: 1px solid #000;
+      transform: translateX(-50%);
+    }
+
+    /* ラベルの重なり防止（斜め表示＋交互の高さ設定） */
+    .mark-label {
+      position: absolute;
+      font-size: 5pt;
+      font-weight: bold;
+      white-space: nowrap;
+      transform-origin: left bottom;
+      transform: rotate(-45deg);
+    }
+
+    .mark-label.level-high {
+      top: -14pt;
+      left: 0;
+    }
+
+    .mark-label.level-low {
+      top: -7pt;
+      left: 0;
+    }
+
+    .instruction {
+      font-size: 5pt;
+      line-height: 1.2;
+      color: #444;
+      margin-top: 1mm;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 入力フォーム -->
+  <div class="form-panel">
+    <h2>身体サイズの入力</h2>
+    
+    <div class="form-group">
+      <label for="armLength">腕の長さ（目からカードまで）[cm]</label>
+      <input type="number" id="armLength" value="60" step="0.5">
+      <div class="help-text">※腕をピンと伸ばしてカードを持った時の目からの距離</div>
+    </div>
+
+    <div class="form-group">
+      <label for="pd">瞳孔間距離（左右の目の幅）[mm]</label>
+      <input type="number" id="pd" value="64" step="1">
+      <div class="help-text">※日本人の平均: 男性約64mm、女性約60mm</div>
+    </div>
+
+    <div class="form-group">
+      <label for="targetWidth">基準とする目標物の幅 [cm]</label>
+      <!-- 初期値を 30cm に設定して 3m/5m を余裕をもって収める -->
+      <input type="number" id="targetWidth" value="30" step="5">
+      <div class="help-text">※例: A4長辺(約30cm)、肩幅(約40cm)など</div>
+    </div>
+
+    <button onclick="generateCard()">目盛りを再計算</button>
+    <button onclick="downloadPDF()" style="background-color: #059669; margin-top: 8px;">PDFとして保存</button>
+  </div>
+
+  <!-- リアルタイムプレビュー -->
+  <div class="preview-panel">
+    <h3>プレビュー（原寸大相当）</h3>
+    <div id="card-container">
+      <div>
+        <div class="card-title">視差距離測定カード (Personal Rangefinder)</div>
+        <div class="card-info">
+          <span id="disp-arm">腕: 60cm</span>
+          <span id="disp-pd">PD: 64mm</span>
+          <span id="disp-target">基準幅: 30cm</span>
+        </div>
+      </div>
+
+      <!-- 目盛り描画エリア -->
+      <div class="ruler" id="ruler"></div>
+
+      <div class="instruction" id="disp-instruction">
+        【使い方】片目で目標物（幅30cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // 表示したい距離のリスト [m]
+  const distancesToMark = [3, 5, 10, 15, 20, 30, 50, 100];
+
+  function generateCard() {
+    const armLengthCm = parseFloat(document.getElementById('armLength').value);
+    const pdMm = parseFloat(document.getElementById('pd').value);
+    const targetWidthCm = parseFloat(document.getElementById('targetWidth').value);
+
+    // プレビューテキストおよび使い方注記の更新
+    document.getElementById('disp-arm').innerText = `腕: ${armLengthCm}cm`;
+    document.getElementById('disp-pd').innerText = `PD: ${pdMm}mm`;
+    document.getElementById('disp-target').innerText = `基準: ${targetWidthCm}cm`;
+    document.getElementById('disp-instruction').innerText = 
+      `【使い方】片目で目標物（幅${targetWidthCm}cm）の左端にカードの0位置を合わせ、目線を動かさず反対の目で見直した時に重なる目盛りが距離です。`;
+
+    const ruler = document.getElementById('ruler');
+    ruler.innerHTML = ''; // クリア
+
+    // 基点の描画 (0m)
+    createMark(ruler, 0, '0m', 100, false);
+
+    distancesToMark.forEach((distM, index) => {
+      const distCm = distM * 100;
+      // カード上での目盛り位置（左端 0 からの距離 [mm]）
+      const shiftMm = (targetWidthCm * armLengthCm) / distCm * 10;
+
+      // 名刺の横幅利用可能領域（約 75mm）に収まる場合のみ描画
+      if (shiftMm > 0 && shiftMm <= 75) {
+        // 隣り合うラベルが重ならないよう、高さを交互に変更
+        const isLowLevel = index % 2 !== 0;
+        createMark(ruler, shiftMm, `${distM}m`, 70, isLowLevel);
+      }
+    });
+  }
+
+  function createMark(container, positionMm, labelText, heightPercent, isLowLevel) {
+    const mark = document.createElement('div');
+    mark.className = 'mark';
+    mark.style.left = `${positionMm}mm`;
+    mark.style.height = `${heightPercent}%`;
+
+    const label = document.createElement('div');
+    label.className = 'mark-label ' + (isLowLevel ? 'level-low' : 'level-high');
+    label.innerText = labelText;
+
+    mark.appendChild(label);
+    container.appendChild(mark);
+  }
+
+  function downloadPDF() {
+    const element = document.getElementById('card-container');
+    const opt = {
+      margin:       10,
+      filename:     'distance_card.pdf',
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 3 },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    html2pdf().set(opt).from(element).save();
+  }
+
+  // 初期描画
+  window.onload = generateCard;
+</script>
+
+</body>
+</html>
